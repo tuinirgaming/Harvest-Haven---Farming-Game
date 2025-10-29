@@ -9,7 +9,6 @@
     <meta name="apple-mobile-web-app-title" content="Harvest Haven">
     <title>Harvest Haven - Farming Game</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkhhcnZlc3QgSGF2ZW4iLAogICJzaG9ydF9uYW1lIjogIkhhcnZlc3QgSGF2ZW4iLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzIyYzU1ZSIsCiAgInRoZW1lX2NvbG9yIjogIiMyMmM1NWUiLAogICJpY29ucyI6IFtdCn0=">
     <style>
         body {
             overscroll-behavior: none;
@@ -57,10 +56,26 @@
     const { useState, useEffect, useCallback } = React;
     const { Sprout, Tractor, TrendingUp, Zap, Award, RefreshCw, Sun, Cloud, CloudRain, Sparkles, ShoppingBag } = lucide;
 
+    const cropTypes = {
+        wheat: { name: '🌾 Wheat', emoji: '🌾', bonus: 1, cost: 0 },
+        corn: { name: '🌽 Corn', emoji: '🌽', bonus: 1.2, cost: 5000 },
+        tomato: { name: '🍅 Tomato', emoji: '🍅', bonus: 1.5, cost: 25000 },
+        pumpkin: { name: '🎃 Pumpkin', emoji: '🎃', bonus: 2, cost: 100000 },
+        melon: { name: '🍉 Melon', emoji: '🍉', bonus: 3, cost: 500000 },
+    };
+    
+    const availablePets = [
+        { id: 'chicken', name: '🐔 Chicken', cost: 10000, bonus: 0.1, description: '+10% production' },
+        { id: 'cow', name: '🐮 Cow', cost: 50000, bonus: 0.2, description: '+20% production' },
+        { id: 'sheep', name: '🐑 Sheep', cost: 150000, bonus: 0.3, description: '+30% production' },
+        { id: 'pig', name: '🐷 Pig', cost: 400000, bonus: 0.5, description: '+50% production' },
+        { id: 'horse', name: '🐴 Horse', cost: 1000000, bonus: 1, description: '+100% production' },
+    ];
+
     function HarvestHaven() {
         const loadGame = () => {
             try {
-                const saved = window.localStorage.getItem('harvestHavenGame');
+                const saved = localStorage.getItem('harvestHavenGame');
                 if (saved) {
                     return JSON.parse(saved);
                 }
@@ -78,37 +93,17 @@
         const [cropsPerSecond, setCropsPerSecond] = useState(0);
         const [seasons, setSeasons] = useState(savedGame?.seasons || 0);
         
-        // Weather system
         const [weather, setWeather] = useState(savedGame?.weather || 'sunny');
         const [weatherTimer, setWeatherTimer] = useState(savedGame?.weatherTimer || 30);
         
-        // Special events
         const [activeEvent, setActiveEvent] = useState(savedGame?.activeEvent || null);
         const [eventTimer, setEventTimer] = useState(savedGame?.eventTimer || 0);
         const [showEventNotification, setShowEventNotification] = useState(false);
         
-        // Crop types
         const [selectedCrop, setSelectedCrop] = useState(savedGame?.selectedCrop || 'wheat');
         const [unlockedCrops, setUnlockedCrops] = useState(savedGame?.unlockedCrops || ['wheat']);
         
-        // Pets
         const [pets, setPets] = useState(savedGame?.pets || []);
-        
-        const cropTypes = {
-            wheat: { name: '🌾 Wheat', emoji: '🌾', bonus: 1, cost: 0, unlocked: true },
-            corn: { name: '🌽 Corn', emoji: '🌽', bonus: 1.2, cost: 5000, unlocked: false },
-            tomato: { name: '🍅 Tomato', emoji: '🍅', bonus: 1.5, cost: 25000, unlocked: false },
-            pumpkin: { name: '🎃 Pumpkin', emoji: '🎃', bonus: 2, cost: 100000, unlocked: false },
-            melon: { name: '🍉 Melon', emoji: '🍉', bonus: 3, cost: 500000, unlocked: false },
-        };
-        
-        const availablePets = [
-            { id: 'chicken', name: '🐔 Chicken', cost: 10000, bonus: 0.1, description: '+10% production' },
-            { id: 'cow', name: '🐮 Cow', cost: 50000, bonus: 0.2, description: '+20% production' },
-            { id: 'sheep', name: '🐑 Sheep', cost: 150000, bonus: 0.3, description: '+30% production' },
-            { id: 'pig', name: '🐷 Pig', cost: 400000, bonus: 0.5, description: '+50% production' },
-            { id: 'horse', name: '🐴 Horse', cost: 1000000, bonus: 1, description: '+100% production' },
-        ];
         
         const [plots, setPlots] = useState(savedGame?.plots || [
             { id: 1, name: '🥕 Carrot Patch', cost: 15, owned: 0, baseProduction: 0.2, unlocked: true },
@@ -157,7 +152,7 @@
                         unlockedCrops,
                         pets
                     };
-                    window.localStorage.setItem('harvestHavenGame', JSON.stringify(gameState));
+                    localStorage.setItem('harvestHavenGame', JSON.stringify(gameState));
                 } catch (e) {
                     console.error('Failed to save game:', e);
                 }
@@ -212,47 +207,52 @@
             return () => clearInterval(interval);
         }, [activeEvent]);
 
-        // Unlock crops
+        // Unlock crops based on total crops
         useEffect(() => {
             Object.keys(cropTypes).forEach(cropId => {
-                if (!cropTypes[cropId].unlocked && totalCrops >= cropTypes[cropId].cost && !unlockedCrops.includes(cropId)) {
+                const crop = cropTypes[cropId];
+                if (totalCrops >= crop.cost && !unlockedCrops.includes(cropId)) {
                     setUnlockedCrops(prev => [...prev, cropId]);
                 }
             });
         }, [totalCrops, unlockedCrops]);
 
-        const getWeatherMultiplier = () => {
-            if (weather === 'sunny') return 1.3;
-            if (weather === 'rainy') return 1.5;
-            return 1;
-        };
-
-        const getEventMultiplier = () => {
-            if (!activeEvent) return 1;
-            return activeEvent.bonus;
-        };
-
-        const getPetBonus = () => {
-            return pets.reduce((sum, pet) => sum + pet.bonus, 0);
-        };
-
+        // Calculate multipliers
         const getCurrentMultiplier = useCallback(() => {
             let multi = 1;
+            
+            // Season bonus
             if (seasons > 0) {
                 multi *= (1 + seasons * 0.15);
             }
+            
+            // Upgrade multipliers
             upgrades.forEach(u => {
                 if (u.owned && u.multiplier) {
                     multi *= u.multiplier;
                 }
             });
-            multi *= getWeatherMultiplier();
-            multi *= getEventMultiplier();
-            multi *= (1 + getPetBonus());
+            
+            // Weather bonus
+            if (weather === 'sunny') multi *= 1.3;
+            if (weather === 'rainy') multi *= 1.5;
+            
+            // Event bonus
+            if (activeEvent) {
+                multi *= activeEvent.bonus;
+            }
+            
+            // Pet bonus
+            const petBonus = pets.reduce((sum, pet) => sum + pet.bonus, 0);
+            multi *= (1 + petBonus);
+            
+            // Crop type bonus
             multi *= cropTypes[selectedCrop].bonus;
+            
             return multi;
         }, [upgrades, seasons, weather, activeEvent, pets, selectedCrop]);
 
+        // Calculate CPS
         useEffect(() => {
             const multiplier = getCurrentMultiplier();
             let cps = 0;
@@ -270,6 +270,7 @@
             setCropsPerSecond(cps);
         }, [plots, upgrades, harvestPower, getCurrentMultiplier]);
 
+        // Passive income
         useEffect(() => {
             const interval = setInterval(() => {
                 if (cropsPerSecond > 0) {
@@ -281,6 +282,7 @@
             return () => clearInterval(interval);
         }, [cropsPerSecond]);
 
+        // Unlock plots
         useEffect(() => {
             setPlots(prev => prev.map(plot => {
                 if (!plot.unlocked && totalCrops >= plot.cost / 2) {
@@ -325,14 +327,6 @@
                 if (upgrade.harvestBonus) {
                     setHarvestPower(p => p + upgrade.harvestBonus);
                 }
-            }
-        };
-
-        const buyCropType = (cropId) => {
-            const crop = cropTypes[cropId];
-            if (crops >= crop.cost && unlockedCrops.includes(cropId)) {
-                setCrops(c => c - crop.cost);
-                setSelectedCrop(cropId);
             }
         };
 
