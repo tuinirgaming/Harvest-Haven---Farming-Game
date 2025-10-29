@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Harvest Haven">
+    <title>Harvest Haven - Farming Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkhhcnZlc3QgSGF2ZW4iLAogICJzaG9ydF9uYW1lIjogIkhhcnZlc3QgSGF2ZW4iLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzIyYzU1ZSIsCiAgInRoZW1lX2NvbG9yIjogIiMyMmM1NWUiLAogICJpY29ucyI6IFtdCn0=">
+    <style>
+        body {
+            overscroll-behavior: none;
+            -webkit-user-select: none;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        .no-tap-highlight {
+            -webkit-tap-highlight-color: transparent;
+        }
+        @keyframes bounce-harvest {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+        .harvest-animation {
+            animation: bounce-harvest 0.3s ease;
+        }
+        @keyframes float-in {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .event-notification {
+            animation: float-in 0.5s ease;
+        }
+        @keyframes wiggle {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(-5deg); }
+            75% { transform: rotate(5deg); }
+        }
+        .pet-wiggle {
+            animation: wiggle 2s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="no-tap-highlight">
+    <div id="root"></div>
+
+```
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.js"></script>
+
+<script type="text/babel">
+    const { useState, useEffect, useCallback } = React;
+    const { Sprout, Tractor, TrendingUp, Zap, Award, RefreshCw, Sun, Cloud, CloudRain, Sparkles, ShoppingBag } = lucide;
+
+    function HarvestHaven() {
+        const loadGame = () => {
+            try {
+                const saved = window.localStorage.getItem('harvestHavenGame');
+                if (saved) {
+                    return JSON.parse(saved);
+                }
+            } catch (e) {
+                console.error('Failed to load game:', e);
+            }
+            return null;
+        };
+
+        const savedGame = loadGame();
+
+        const [crops, setCrops] = useState(savedGame?.crops || 0);
+        const [totalCrops, setTotalCrops] = useState(savedGame?.totalCrops || 0);
+        const [harvestPower, setHarvestPower] = useState(savedGame?.harvestPower || 1);
+        const [cropsPerSecond, setCropsPerSecond] = useState(0);
+        const [seasons, setSeasons] = useState(savedGame?.seasons || 0);
+        
+        // Weather system
+        const [weather, setWeather] = useState(savedGame?.weather || 'sunny');
+        const [weatherTimer, setWeatherTimer] = useState(savedGame?.weatherTimer || 30);
+        
+        // Special events
+        const [activeEvent, setActiveEvent] = useState(savedGame?.activeEvent || null);
+        const [eventTimer, setEventTimer] = useState(savedGame?.eventTimer || 0);
+        const [showEventNotification, setShowEventNotification] = useState(false);
+        
+        // Crop types
+        const [selectedCrop, setSelectedCrop] = useState(savedGame?.selectedCrop || 'wheat');
+        const [unlockedCrops, setUnlockedCrops] = useState(savedGame?.unlockedCrops || ['wheat']);
+        
+        // Pets
+        const [pets, setPets] = useState(savedGame?.pets || []);
+        
+        const cropTypes = {
+            wheat: { name: '🌾 Wheat', emoji: '🌾', bonus: 1, cost: 0, unlocked: true },
+            corn: { name: '🌽 Corn', emoji: '🌽', bonus: 1.2, cost: 5000, unlocked: false },
+            tomato: { name: '🍅 Tomato', emoji: '🍅', bonus: 1.5, cost: 25000, unlocked: false },
+            pumpkin: { name: '🎃 Pumpkin', emoji: '🎃', bonus: 2, cost: 100000, unlocked: false },
+            melon: { name: '🍉 Melon', emoji: '🍉', bonus: 3, cost: 500000, unlocked: false },
+        };
+        
+        const availablePets = [
+            { id: 'chicken', name: '🐔 Chicken', cost: 10000, bonus: 0.1, description: '+10% production' },
+            { id: 'cow', name: '🐮 Cow', cost: 50000, bonus: 0.2, description: '+20% production' },
+            { id: 'sheep', name: '🐑 Sheep', cost: 150000, bonus: 0.3, description: '+30% production' },
+            { id: 'pig', name: '🐷 Pig', cost: 400000, bonus: 0.5, description: '+50% production' },
+            { id: 'horse', name: '🐴 Horse', cost: 1000000, bonus: 1, description: '+100% production' },
+        ];
+        
+        const [plots, setPlots] = useState(savedGame?.plots || [
+            { id: 1, name: '🥕 Carrot Patch', cost: 15, owned: 0, baseProduction: 0.2, unlocked: true },
+            { id: 2, name: '🌽 Corn Field', cost: 120, owned: 0, baseProduction: 1.5, unlocked: false },
+            { id: 3, name: '🍅 Tomato Farm', cost: 1200, owned: 0, baseProduction: 10, unlocked: false },
+            { id: 4, name: '🍓 Berry Orchard', cost: 12000, owned: 0, baseProduction: 65, unlocked: false },
+            { id: 5, name: '🌾 Wheat Ranch', cost: 120000, owned: 0, baseProduction: 400, unlocked: false },
+            { id: 6, name: '🎃 Pumpkin Estate', cost: 1200000, owned: 0, baseProduction: 2500, unlocked: false },
+        ]);
+        
+        const [upgrades, setUpgrades] = useState(savedGame?.upgrades || [
+            { id: 'harvest1', name: '🧤 Work Gloves', cost: 50, harvestBonus: 1, owned: false, category: 'harvest' },
+            { id: 'harvest2', name: '🪝 Farming Hook', cost: 600, harvestBonus: 5, owned: false, category: 'harvest' },
+            { id: 'harvest3', name: '🪓 Steel Scythe', cost: 6000, harvestBonus: 30, owned: false, category: 'harvest' },
+            { id: 'harvest4', name: '⚙️ Power Tools', cost: 60000, harvestBonus: 120, owned: false, category: 'harvest' },
+            
+            { id: 'boost1', name: '🌱 Fertilizer I', cost: 300, multiplier: 1.5, owned: false, category: 'boost' },
+            { id: 'boost2', name: '💧 Irrigation', cost: 3000, multiplier: 2, owned: false, category: 'boost' },
+            { id: 'boost3', name: '☀️ Greenhouse', cost: 30000, multiplier: 3, owned: false, category: 'boost' },
+            { id: 'boost4', name: '🧬 GMO Seeds', cost: 300000, multiplier: 5, owned: false, category: 'boost' },
+            
+            { id: 'auto1', name: '🤖 Farm Bot I', cost: 1500, autoHarvest: 1, owned: false, category: 'auto' },
+            { id: 'auto2', name: '🚜 Harvester II', cost: 15000, autoHarvest: 6, owned: false, category: 'auto' },
+            { id: 'auto3', name: '🛸 Drone Farm', cost: 150000, autoHarvest: 30, owned: false, category: 'auto' },
+        ]);
+
+        const [activeTab, setActiveTab] = useState('plots');
+        const [clickAnimation, setClickAnimation] = useState(false);
+
+        // Save game
+        useEffect(() => {
+            const saveGame = () => {
+                try {
+                    const gameState = {
+                        crops,
+                        totalCrops,
+                        harvestPower,
+                        seasons,
+                        plots,
+                        upgrades,
+                        weather,
+                        weatherTimer,
+                        activeEvent,
+                        eventTimer,
+                        selectedCrop,
+                        unlockedCrops,
+                        pets
+                    };
+                    window.localStorage.setItem('harvestHavenGame', JSON.stringify(gameState));
+                } catch (e) {
+                    console.error('Failed to save game:', e);
+                }
+            };
+
+            const saveInterval = setInterval(saveGame, 2000);
+            return () => clearInterval(saveInterval);
+        }, [crops, totalCrops, harvestPower, seasons, plots, upgrades, weather, weatherTimer, activeEvent, eventTimer, selectedCrop, unlockedCrops, pets]);
+
+        // Weather system
+        useEffect(() => {
+            const interval = setInterval(() => {
+                setWeatherTimer(t => {
+                    if (t <= 1) {
+                        const weathers = ['sunny', 'cloudy', 'rainy'];
+                        const newWeather = weathers[Math.floor(Math.random() * weathers.length)];
+                        setWeather(newWeather);
+                        return 30 + Math.floor(Math.random() * 30);
+                    }
+                    return t - 1;
+                });
+            }, 1000);
+            return () => clearInterval(interval);
+        }, []);
+
+        // Special events system
+        useEffect(() => {
+            const interval = setInterval(() => {
+                if (!activeEvent) {
+                    if (Math.random() < 0.02) {
+                        const events = [
+                            { id: 'festival', name: '🎉 Harvest Festival', bonus: 2, duration: 20, description: '2x all production!' },
+                            { id: 'bumper', name: '🌟 Bumper Crop', bonus: 3, duration: 15, description: '3x click power!' },
+                            { id: 'goldrush', name: '💰 Gold Rush', bonus: 1.5, duration: 30, description: '1.5x everything!' },
+                        ];
+                        const event = events[Math.floor(Math.random() * events.length)];
+                        setActiveEvent(event);
+                        setEventTimer(event.duration);
+                        setShowEventNotification(true);
+                        setTimeout(() => setShowEventNotification(false), 3000);
+                    }
+                } else {
+                    setEventTimer(t => {
+                        if (t <= 1) {
+                            setActiveEvent(null);
+                            return 0;
+                        }
+                        return t - 1;
+                    });
+                }
+            }, 1000);
+            return () => clearInterval(interval);
+        }, [activeEvent]);
+
+        // Unlock crops
+        useEffect(() => {
+            Object.keys(cropTypes).forEach(cropId => {
+                if (!cropTypes[cropId].unlocked && totalCrops >= cropTypes[cropId].cost && !unlockedCrops.includes(cropId)) {
+                    setUnlockedCrops(prev => [...prev, cropId]);
+                }
+            });
+        }, [totalCrops, unlockedCrops]);
+
+        const getWeatherMultiplier = () => {
+            if (weather === 'sunny') return 1.3;
+            if (weather === 'rainy') return 1.5;
+            return 1;
+        };
+
+        const getEventMultiplier = () => {
+            if (!activeEvent) return 1;
+            return activeEvent.bonus;
+        };
+
+        const getPetBonus = () => {
+            return pets.reduce((sum, pet) => sum + pet.bonus, 0);
+        };
+
+        const getCurrentMultiplier = useCallback(() => {
+            let multi = 1;
+            if (seasons > 0) {
+                multi *= (1 + seasons * 0.15);
+            }
+            upgrades.forEach(u => {
+                if (u.owned && u.multiplier) {
+                    multi *= u.multiplier;
+                }
+            });
+            multi *= getWeatherMultiplier();
+            multi *= getEventMultiplier();
+            multi *= (1 + getPetBonus());
+            multi *= cropTypes[selectedCrop].bonus;
+            return multi;
+        }, [upgrades, seasons, weather, activeEvent, pets, selectedCrop]);
+
+        useEffect(() => {
+            const multiplier = getCurrentMultiplier();
+            let cps = 0;
+            
+            plots.forEach(plot => {
+                cps += plot.owned * plot.baseProduction * multiplier;
+            });
+            
+            upgrades.forEach(u => {
+                if (u.owned && u.autoHarvest) {
+                    cps += u.autoHarvest * harvestPower;
+                }
+            });
+            
+            setCropsPerSecond(cps);
+        }, [plots, upgrades, harvestPower, getCurrentMultiplier]);
+
+        useEffect(() => {
+            const interval = setInterval(() => {
+                if (cropsPerSecond > 0) {
+                    setCrops(c => c + cropsPerSecond / 10);
+                    setTotalCrops(t => t + cropsPerSecond / 10);
+                }
+            }, 100);
+            
+            return () => clearInterval(interval);
+        }, [cropsPerSecond]);
+
+        useEffect(() => {
+            setPlots(prev => prev.map(plot => {
+                if (!plot.unlocked && totalCrops >= plot.cost / 2) {
+                    return { ...plot, unlocked: true };
+                }
+                return plot;
+            }));
+        }, [totalCrops]);
+
+        const handleHarvest = () => {
+            let clickMultiplier = getCurrentMultiplier();
+            if (activeEvent?.id === 'bumper') {
+                clickMultiplier *= 3;
+            }
+            const gain = harvestPower * clickMultiplier;
+            setCrops(c => c + gain);
+            setTotalCrops(t => t + gain);
+            setClickAnimation(true);
+            setTimeout(() => setClickAnimation(false), 300);
+        };
+
+        const buyPlot = (id) => {
+            const plot = plots.find(p => p.id === id);
+            if (crops >= plot.cost) {
+                setCrops(c => c - plot.cost);
+                setPlots(prev => prev.map(p => 
+                    p.id === id 
+                        ? { ...p, owned: p.owned + 1, cost: Math.floor(p.cost * 1.15) }
+                        : p
+                ));
+            }
+        };
+
+        const buyUpgrade = (id) => {
+            const upgrade = upgrades.find(u => u.id === id);
+            if (!upgrade.owned && crops >= upgrade.cost) {
+                setCrops(c => c - upgrade.cost);
+                setUpgrades(prev => prev.map(u => 
+                    u.id === id ? { ...u, owned: true } : u
+                ));
+                
+                if (upgrade.harvestBonus) {
+                    setHarvestPower(p => p + upgrade.harvestBonus);
+                }
+            }
+        };
+
+        const buyCropType = (cropId) => {
+            const crop = cropTypes[cropId];
+            if (crops >= crop.cost && unlockedCrops.includes(cropId)) {
+                setCrops(c => c - crop.cost);
+                setSelectedCrop(cropId);
+            }
+        };
+
+        const buyPet = (petId) => {
+            const pet = availablePets.find(p => p.id === petId);
+            const alreadyOwned = pets.find(p => p.id === petId);
+            if (!alreadyOwned && crops >= pet.cost) {
+                setCrops(c => c - pet.cost);
+                setPets(prev => [...prev, pet]);
+            }
+        };
+
+        const advanceSeason = () => {
+            if (totalCrops >= 1500000) {
+                const newSeasons = Math.floor(Math.sqrt(totalCrops / 1500000));
+                setSeasons(s => s + newSeasons);
+                
+                setCrops(0);
+                setTotalCrops(0);
+                setHarvestPower(1);
+                setPlots(prev => prev.map(p => ({ 
+                    ...p, 
+                    owned: 0, 
+                    cost: [15, 120, 1200, 12000, 120000, 1200000][p.id - 1],
+                    unlocked: p.id === 1 
+                })));
+                setUpgrades(prev => prev.map(u => ({ ...u, owned: false })));
+            }
+        };
+
+        const formatNumber = (num) => {
+            if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+            if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+            if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
+            return Math.floor(num).toLocaleString();
+        };
+
+        const getWeatherIcon = () => {
+            if (weather === 'sunny') return <Sun className="w-5 h-5 text-yellow-500" />;
+            if (weather === 'rainy') return <CloudRain className="w-5 h-5 text-blue-500" />;
+            return <Cloud className="w-5 h-5 text-gray-500" />;
+        };
+
+        const canAdvanceSeason = totalCrops >= 1500000;
+        const seasonGain = canAdvanceSeason ? Math.floor(Math.sqrt(totalCrops / 1500000)) : 0;
+
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-green-100 via-emerald-50 to-lime-100 p-2 sm:p-4">
+                <div className="max-w-6xl mx-auto">
+                    {showEventNotification && activeEvent && (
+                        <div className="event-notification fixed top-4 left-1/2 transform -translate-x-1/2 bg-purple-600 text-white px-6 py-3 rounded-lg shadow-2xl z-50 flex items-center gap-2">
+                            <Sparkles className="w-5 h-5" />
+                            <span className="font-bold">{activeEvent.name}</span>
+                            <span className="text-sm">{activeEvent.description}</span>
+                        </div>
+                    )}
+
+                    <div className="bg-white rounded-lg shadow-lg p-3 sm:p-6 mb-3 sm:mb-4">
+                        <div className="flex justify-between items-start mb-3">
+                            <h1 className="text-2xl sm:text-4xl font-bold text-green-600 flex items-center gap-2">
+                                <Sprout className="w-6 h-6 sm:w-10 sm:h-10" />
+                                Harvest Haven
+                            </h1>
+                            <div className="flex flex-col items-end gap-1">
+                                <div className="flex items-center gap-2 bg-blue-100 px-3 py-1 rounded-lg">
+                                    {getWeatherIcon()}
+                                    <span className="text-sm font-semibold capitalize">{weather}</span>
+                                    <span className="text-xs text-gray-600">{weatherTimer}s</span>
+                                </div>
+                                {activeEvent && (
+                                    <div className="flex items-center gap-2 bg-purple-100 px-3 py-1 rounded-lg">
+                                        <Sparkles className="w-4 h-4 text-purple-600" />
+                                        <span className="text-xs font-semibold">{activeEvent.name} - {eventTimer}s</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2 sm:gap-4 text-center">
+                            <div className="bg-gradient-to-br from-green-100 to-emerald-100 p-2 sm:p-4 rounded-lg">
+                                <div className="text-xs sm:text-sm text-gray-600">🌾 Crops</div>
+                                <div className="text-lg sm:text-2xl font-bold text-green-700">{formatNumber(crops)}</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-lime-100 to-green-100 p-2 sm:p-4 rounded-lg">
+                                <div className="text-xs sm:text-sm text-gray-600">⏱️ Per Second</div>
+                                <div className="text-lg sm:text-2xl font-bold text-lime-700">{formatNumber(cropsPerSecond)}</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-amber-100 to-orange-100 p-2 sm:p-4 rounded-lg">
+                                <div className="text-xs sm:text-sm text-gray-600">🪝 Harvest Power</div>
+                                <div className="text-lg sm:text-2xl font-bold text-amber-700">{formatNumber(harvestPower * getCurrentMultiplier())}</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-purple-100 to-pink-100 p-2 sm:p-4 rounded-lg">
+                                <div className="text-xs sm:text-sm text-gray-600">🍂 Seasons</div>
+                                <div className="text-lg sm:text-2xl font-bold text-purple-700">{seasons}</div>
+                            </div>
+                        </div>
+
+                        {pets.length > 0 && (
+                            <div className="mt-3 flex gap-2 justify-center flex-wrap">
+                                {pets.map(pet => (
+                                    <div key={pet.id} className="pet-wiggle text-2xl sm:text-3xl" title={pet.name}>
+                                        {pet.name.split(' ')[0]}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 mb-3 sm:mb-4">
+                        <div className="flex flex-col items-center justify-center">
+                            <div className="text-2xl sm:text-3xl mb-2">
+                                {cropTypes[selectedCrop].emoji}
+                            </div>
+                            <button
+                                onClick={handleHarvest}
+                                className={`w-40 h-40 sm:w-48 sm:h-48 rounded-full bg-gradient-to-br from-green-400 via-emerald-400 to-lime-500 shadow-xl hover:shadow-2xl transition-all transform active:scale-95 flex items-center justify-center touch-manipulation ${clickAnimation ? 'harvest-animation' : ''}`}
+                            >
+                                <Sprout className="w-20 h-20 sm:w-24 sm:h-24 text-white" />
+                            </button>
+                            <div className="mt-4 text-center">
+                                <div className="text-sm sm:text-lg text-gray-600">🌱 Tap to harvest!</div>
+                                <div className="text-2xl sm:text-3xl font-bold text-green-600 mt-1 sm:mt-2">
+                                    +{formatNumber(harvestPower * getCurrentMultiplier())}
+                                </div>
+                            </div>
+                            
+                            {canAdvanceSeason && (
+                                <button
+                                    onClick={advanceSeason}
+                                    className="mt-4 px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-bold hover:from-purple-600 hover:to-pink-600 transition-all flex items-center gap-2 touch-manipulation text-sm sm:text-base"
+                                >
+                                    <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    New Season (+{seasonGain} Bonus)
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-lg p-3 sm:p-6">
+                        <div className="flex gap-1 sm:gap-2 mb-3 sm:mb-4 overflow-x-auto pb-2">
+                            <button
+                                onClick={() => setActiveTab('plots')}
+                                className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-1 sm:gap-2 whitespace-nowrap text-xs sm:text-base touch-manipulation ${activeTab === 'plots' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700'}`}
+                            >
+                                <Tractor className="w-3 h-3 sm:w-4 sm:h-4" />
+                                Plots
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('harvest')}
+                                className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-1 sm:gap-2 whitespace-nowrap text-xs sm:text-base touch-manipulation ${activeTab === 'harvest' ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-700'}`}
+                            >
+                                <Zap className="w-3 h-3 sm:w-4 sm:h-4" />
+                                Harvest
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('boost')}
+                                className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-1 sm:gap-2 whitespace-nowrap text-xs sm:text-base touch-manipulation ${activeTab === 'boost' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'}`}
+                            >
+                                <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />
+                                Boost
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('auto')}
+                                className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-1 sm:gap-2 whitespace-nowrap text-xs sm:text-base touch-manipulation ${activeTab === 'auto' ? 'bg-purple-500 text-white' : 'bg-gray-200 text-gray-700'}`}
+                            >
+                                <Award className="w-3 h-3 sm:w-4 sm:h-4" />
+                                Auto
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('crops')}
+                                className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-1 sm:gap-2 whitespace-nowrap text-xs sm:text-base touch-manipulation ${activeTab === 'crops' ? 'bg-pink-500 text-white' : 'bg-gray-200 text-gray-700'}`}
+                            >
+                                <ShoppingBag className="w-3 h-3 sm:w-4 sm:h-4" />
+                                Crops
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('pets')}
+                                className={`px-3 py-2 rounded-lg font-semibold whitespace-nowrap text-xs sm:text-base touch-manipulation ${activeTab === 'pets' ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-700'}`}
+                            >
+                                🐾 Pets
+                            </button>
+                        </div>
+
+                        <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                            {activeTab === 'plots' && plots.map(plot => (
+                                plot.unlocked && (
+                                    <div key={plot.id} className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-2 border-green-200">
+                                        <div className="flex-1 min-w-0 mr-2">
+                                            <div className="font-bold text-gray-800 text-sm sm:text-base">{plot.name}</div>
+                                            <div className="text-xs sm:text-sm text-gray-600 truncate">
+                                                {plot.owned} owned | {formatNumber(plot.baseProduction * getCurrentMultiplier())}/s
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => buyPlot(plot.id)}
+                                            disabled={crops < plot.cost}
+                                            className={`px-4 sm:px-6 py-2 rounded-lg font-bold whitespace-nowrap text-sm sm:text-base touch-manipulation ${
+                                                crops >= plot.cost
+                                                    ? 'bg-green-500 text-white active:bg-green-600'
+                                                    : 'bg-gray-300 text-gray-500'
+                                            }`}
+                                        >
+                                            {formatNumber(plot.cost)}
+                                        </button>
+                                    </div>
+                                )
+                            ))}
+
+                            {activeTab === 'crops' && Object.keys(cropTypes).map(cropId => {
+                                const crop = cropTypes[cropId];
+                                const isUnlocked = unlockedCrops.includes(cropId);
+                                const isSelected = selectedCrop === cropId;
+                                
+                                return (
+                                    <div key={cropId} className={`flex items-center justify-between p-3 sm:p-4 rounded-lg border-2 ${
+                                        isSelected 
+                                            ? 'bg-green-100 border-green-400' 
+                                            : isUnlocked
+                                            ? 'bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-200'
+                                            : 'bg-gray-100 border-gray-300'
+                                    }`}>
+                                        <div className="flex-1 min-w-0 mr-2">
+                                            <div className="font-bold text-gray-800 text-sm sm:text-base">{crop.name}</div>
+                                            <div className="text-xs sm:text-sm text-gray-600">
+                                                {crop.bonus}x multiplier {!isUnlocked && `(Unlock: ${formatNumber(crop.cost)})`}
+                                            </div>
+                                        </div>
+                                        {isUnlocked && !isSelected && (
+                                            <button
+                                                onClick={() => setSelectedCrop(cropId)}
+                                                className="px-4 sm:px-6 py-2 rounded-lg font-bold whitespace-nowrap text-sm sm:text-base touch-manipulation bg-green-500 text-white active:bg-green-600"
+                                            >
+                                                Plant
+                                            </button>
+                                        )}
+                                        {isSelected && (
+                                            <span className="px-4 sm:px-6 py-2 rounded-lg font-bold text-sm sm:text-base bg-green-600 text-white">
+                                                Active
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })}
+
+                            {activeTab === 'pets' && availablePets.map(pet => {
+                                const owned = pets.find(p => p.id === pet.id);
+                                
+                                return (
+                                    <div key={pet.id} className={`flex items-center justify-between p-3 sm:p-4 rounded-lg border-2 ${
+                                        owned 
+                                            ? 'bg-gray-100 border-gray-300' 
+                                            : 'bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200'
+                                    }`}>
+                                        <div className="flex-1 min-w-0 mr-2">
+                                            <div className="font-bold text-gray-800 text-sm sm:text-base">{pet.name}</div>
+                                            <div className="text-xs sm:text-sm text-gray-600">{pet.description}</div>
+                                        </div>
+                                        <button
+                                            onClick={() => buyPet(pet.id)}
+                                            disabled={owned || crops < pet.cost}
+                                            className={`px-4 sm:px-6 py-2 rounded-lg font-bold whitespace-nowrap text-sm sm:text-base touch-manipulation ${
+                                                owned
+                                                    ? 'bg-green-500 text-white'
+                                                    : crops >= pet.cost
+                                                    ? 'bg-orange-500 text-white active:bg-orange-600'
+                                                    : 'bg-gray-300 text-gray-500'
+                                            }`}
+                                        >
+                                            {owned ? 'OWNED' : formatNumber(pet.cost)}
+                                        </button>
+                                    </div>
+                                );
+                            })}
+
+                            {['harvest', 'boost', 'auto'].includes(activeTab) && 
+                                upgrades
+                                    .filter(u => u.category === activeTab)
+                                    .map(upgrade => (
+                                        <div key={upgrade.id} className={`flex items-center justify-between p-3 sm:p-4 rounded-lg border-2 ${
+                                            upgrade.owned 
+                                                ? 'bg-gray-100 border-gray-300' 
+                                                : 'bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200'
+                                        }`}>
+                                            <div className="flex-1 min-w-0 mr-2">
+                                                <div className="font-bold text-gray-800 text-sm sm:text-base">{upgrade.name}</div>
+                                                <div className="text-xs sm:text-sm text-gray-600">
+                                                    {upgrade.harvestBonus && `+${upgrade.harvestBonus} harvest power`}
+                                                    {upgrade.multiplier && `${upgrade.multiplier}x production boost`}
+                                                    {upgrade.autoHarvest && `${upgrade.autoHarvest} auto crops/s`}
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => buyUpgrade(upgrade.id)}
+                                                disabled={upgrade.owned || crops < upgrade.cost}
+                                                className={`px-4 sm:px-6 py-2 rounded-lg font-bold whitespace-nowrap text-sm sm:text-base touch-manipulation ${
+                                                    upgrade.owned
+                                                        ? 'bg-green-500 text-white'
+                                                        : crops >= upgrade.cost
+                                                        ? 'bg-amber-500 text-white active:bg-amber-600'
+                                                        : 'bg-gray-300 text-gray-500'
+                                                }`}
+                                            >
+                                                {upgrade.owned ? 'OWNED' : formatNumber(upgrade.cost)}
+                                            </button>
+                                        </div>
+                                    ))
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    ReactDOM.render(<HarvestHaven />, document.getElementById('root'));
+</script>
+```
+
+</body>
+</html>
